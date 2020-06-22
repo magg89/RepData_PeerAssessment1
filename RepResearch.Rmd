@@ -1,0 +1,89 @@
+---
+title: "RepResearch"
+author: "Marcos Garcia Garza"
+date: "22/6/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# 1. Code for reading in the dataset and/or processing the data
+```{r download, echo=TRUE}
+
+download.file("https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip", destfile = "activity.zip", mode="wb")
+unzip("activity.zip")
+ds <- read.csv("activity.csv", header = TRUE)
+head(ds)
+```
+# 2. Histogram of the total number of steps taken each day
+```{r hist1, echo=TRUE}
+    library(dplyr)
+ds_d <- ds %>% 
+      select(date, steps) %>%
+      group_by(date) %>%
+      summarize(tot_steps = sum(steps)) %>% 
+      na.omit()
+    hist(ds_d$tot_steps, xlab = "Total Steps by Day", main = "Histogram of Total Daily Steps", breaks = 30)
+```
+# 3. Mean and median number of steps taken each day
+```{r mean&median, echo=TRUE}
+mean(ds_d$tot_steps)
+median(ds_d$tot_steps)
+```
+# 4. Time series plot of the average number of steps taken
+```{r times, echo=TRUE}
+library(ggplot2)
+    ds_i <- ds %>%
+      select(interval, steps) %>%
+      na.omit() %>%
+      group_by(interval) %>%
+      summarize(tsteps = mean(steps))
+    ggplot(ds_i, aes(x = interval, y = tsteps))+geom_line(color="blue")
+```
+# 5. The 5-minute interval that, on average, contains the maximum number of steps
+```{r interval, echo=TRUE}
+ds_i[which(ds_i$tsteps == max(ds_i$tsteps)),]
+```
+# 6. Code to describe and show a strategy for imputing missing data
+## 6.1 Calculate and report the total number of missing values in the dataset
+```{r missings, echo=TRUE}
+summary(is.na(ds$steps))
+```
+## 6.2 Strategy for filling in all of the missing values in the dataset
+The average of the 5-minute interval in the whole dataset will be used to replace the NAs. A new dataset is created.
+```{r replace, echo=TRUE}
+ repNAs <- function(x) replace(x, is.na(x), mean(x, na.rm = TRUE))
+    meanrmv <- ds %>%
+      group_by(interval) %>%
+      mutate(steps = repNAs(steps))
+    head(meanrmv)
+```
+# 7. Histogram of total number of steps taken each day with the NAs replaced; mean & median of total number of steps per day
+```{r hist2, echo=TRUE}
+ds_d2 <- meanrmv %>% 
+      select(date, steps) %>%
+      group_by(date) %>%
+      summarize(tot_steps2 = sum(steps)) %>% 
+      na.omit()
+hist(ds_d2$tot_steps2, xlab = "Total Steps by Day", main = "Histogram of Total Daily Steps (NAs Removed)", breaks = 30)
+ dsbyday <- aggregate(meanrmv$steps, by = list(meanrmv$date), sum)
+    names(dsbyday)[1]="date"
+    names(dsbyday)[2]="TotalSteps"
+    summary(dsbyday)
+```
+# 8. Panel plot comparing the average number of steps taken per 5-minute interval across weekdays and weekends
+```{r weekend, echo=TRUE}
+ 
+ meanrmv$date <- as.Date(meanrmv$date)
+    meanrmv$weekday <- weekdays(meanrmv$date)
+    meanrmv$weekend <- ifelse(meanrmv$weekday == "sábado" | meanrmv$weekday == "domingo", "Weekend", "Weekday")
+    meandata <- aggregate(meanrmv$steps, by=list(meanrmv$weekend, meanrmv$interval), na.omit(mean))
+    names(meandata) <- c("weekend", "interval", "steps")
+    ggplot(meandata, aes(x=interval, y=steps, color=weekend))+
+      geom_line()+
+      facet_grid(weekend ~.)+
+      xlab("Interval")+
+      ylab("Steps Mean")+
+      ggtitle("Comparison of Average Number of Steps in Each Interval Weekdays/Weekends")
+```
